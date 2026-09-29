@@ -57,11 +57,55 @@ button:hover {
   background: #1e40af;
 }
 
+button:disabled {
+  background: #e5e7eb;
+  color: #4b5563;
+  cursor: not-allowed;
+}
+
+#task-microphone[data-listening="true"] {
+  background: #b91c1c;
+}
+
+#speech-status[data-error="true"] {
+  color: #b91c1c;
+}
+
 button:focus-visible,
 input:focus-visible,
 textarea:focus-visible {
   outline: 3px solid #7c3aed;
   outline-offset: 3px;
+}
+
+select:focus-visible {
+  outline: 3px solid #7c3aed;
+  outline-offset: 3px;
+}
+
+#task-reminder,
+#reminder-amount,
+#reminder-unit {
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  margin-top: 8px;
+  border: 1px solid #6b7280;
+  border-radius: 6px;
+  font: inherit;
+}
+
+#reminders {
+  padding: 12px;
+  margin-bottom: 16px;
+  background: #eef2ff;
+  border: 1px solid #1d4ed8;
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+
+#reminder-list {
+  padding-left: 20px;
 }
 
 .hint {

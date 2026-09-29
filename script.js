@@ -1,6 +1,13 @@
 const taskForm = document.querySelector('#task-form');
 const taskInput = document.querySelector('#task-title');
 const taskDue = document.querySelector('#task-due');
+const taskReminder = document.querySelector('#task-reminder');
+const customReminder = document.querySelector('#custom-reminder');
+const reminderAmount = document.querySelector('#reminder-amount');
+const reminderUnit = document.querySelector('#reminder-unit');
+const reminderSection = document.querySelector('#reminders');
+const reminderList = document.querySelector('#reminder-list');
+const reminderStatus = document.querySelector('#reminder-status');
 const taskList = document.querySelector('#task-list');
 const emptyMessage = document.querySelector('#empty-message');
 const taskError = document.querySelector('#task-error');
@@ -8,6 +15,10 @@ const taskStatus = document.querySelector('#task-status');
 const storageStatus = document.querySelector('#storage-status');
 const storageKey = 'hng-todo-tasks';
 let tasks = [];
+
+function validTaskTitle(value) {
+  return typeof value === 'string' && value.trim().length > 0 && value.length <= 200;
+}
 
 function validDueDate(value) {
   if (typeof value !== 'string' ||
@@ -30,8 +41,89 @@ function saveTasks() {
   try {
     localStorage.setItem(storageKey, JSON.stringify(tasks));
     storageStatus.textContent = '';
+    return true;
   } catch {
     storageStatus.textContent = 'Tasks could not be saved. You can keep working, but your latest changes may be lost after refresh.';
+    return false;
+  }
+}
+
+function validReminderMinutes(value) {
+  return typeof value === 'number' && Number.isFinite(value) &&
+    (value === 0 || (value >= 1 && value <= 4320));
+}
+
+function validReminderUnit(unit) {
+  return ['minutes', 'hours', 'days'].includes(unit);
+}
+
+function minutesPerUnit(unit) {
+  if (unit === 'days') return 1440;
+  if (unit === 'hours') return 60;
+  return 1;
+}
+
+function customReminderMinutes(amount, unit) {
+  if (!validReminderUnit(unit) || typeof amount !== 'number' ||
+      !Number.isFinite(amount) || amount <= 0) return null;
+  const minutes = amount * minutesPerUnit(unit);
+  return validReminderMinutes(minutes) && minutes >= 1 ? minutes : null;
+}
+
+function updateCustomReminder() {
+  const isCustom = taskReminder.value === 'custom';
+  customReminder.hidden = !isCustom;
+  // Hidden fields must not block submission of a quick choice.
+  reminderAmount.disabled = !isCustom;
+  reminderUnit.disabled = !isCustom;
+  reminderAmount.required = isCustom;
+  reminderAmount.removeAttribute('aria-invalid');
+  reminderUnit.removeAttribute('aria-invalid');
+}
+
+function formatReminder(task) {
+  if (task.reminderMinutes === 0) return 'Reminder: at the due time';
+  const unit = task.reminderUnit || (task.reminderMinutes === 60 ? 'hours' : 'minutes');
+  const amount = task.reminderMinutes / minutesPerUnit(unit);
+  const number = new Intl.NumberFormat(undefined, { maximumFractionDigits: 10 }).format(amount);
+  const label = amount === 1 ? unit.slice(0, -1) : unit;
+  const prefix = task.reminderUnit === null ? 'Reminder' : 'Custom reminder';
+  return `${prefix}: ${number} ${label} before`;
+}
+
+function reminderTime(task) {
+  // Due dates are local wall-clock times; subtract the selected number of minutes.
+  return new Date(task.dueAt).getTime() - task.reminderMinutes * 60 * 1000;
+}
+
+function checkReminders(now = Date.now()) {
+  for (const task of tasks) {
+    if (task.completed || task.dueAt === null || task.reminderMinutes === null ||
+        task.reminderShown || !(reminderTime(task) <= now)) continue;
+
+    // Persist before displaying so a refresh cannot show this reminder again.
+    task.reminderShown = true;
+    if (!saveTasks()) {
+      task.reminderShown = false;
+      reminderStatus.textContent = 'Reminders are waiting because browser storage is unavailable. They will be retried when saving works.';
+      return;
+    }
+    reminderStatus.textContent = '';
+    const item = document.createElement('li');
+    const message = document.createElement('p');
+    message.textContent = `${task.title} — due ${formatDueDate(task.dueAt)} (local time)`;
+    const dismiss = document.createElement('button');
+    dismiss.type = 'button';
+    dismiss.textContent = 'Dismiss';
+    dismiss.setAttribute('aria-label', `Dismiss reminder: ${task.title}`);
+    dismiss.addEventListener('click', function () {
+      item.remove();
+      reminderSection.hidden = reminderList.children.length === 0;
+      document.querySelector('#show-tasks').focus();
+    });
+    item.append(message, dismiss);
+    reminderSection.hidden = false;
+    reminderList.append(item);
   }
 }
 
@@ -66,9 +158,7 @@ function loadTasks() {
       savedTask === null ||
       typeof savedTask !== 'object' ||
       Array.isArray(savedTask) ||
-      typeof savedTask.title !== 'string' ||
-      savedTask.title.length > 200 ||
-      savedTask.title.trim().length === 0 ||
+      !validTaskTitle(savedTask.title) ||
       typeof savedTask.completed !== 'boolean'
     ) {
       storageStatus.textContent = 'Some saved tasks were invalid and were skipped.';
@@ -85,10 +175,29 @@ function loadTasks() {
       }
     }
 
+    let reminderMinutes = null;
+    let reminderShown = false;
+    let savedReminderUnit = null;
+    if (savedTask.reminderMinutes !== undefined && savedTask.reminderMinutes !== null) {
+      const unit = savedTask.reminderUnit ?? null;
+      if (dueAt !== null && validReminderMinutes(savedTask.reminderMinutes) &&
+          typeof savedTask.reminderShown === 'boolean' &&
+          (unit === null || (validReminderUnit(unit) && savedTask.reminderMinutes >= 1))) {
+        reminderMinutes = savedTask.reminderMinutes;
+        reminderShown = savedTask.reminderShown;
+        savedReminderUnit = unit;
+      } else {
+        storageStatus.textContent = 'Some saved reminders were invalid and were disabled. The tasks are still available.';
+      }
+    }
+
     tasks.push({
       title: savedTask.title.trim(),
       completed: savedTask.completed,
       dueAt: dueAt,
+      reminderMinutes: reminderMinutes,
+      reminderShown: reminderShown,
+      reminderUnit: savedReminderUnit,
     });
   }
 
@@ -150,6 +259,12 @@ function renderTask(taskData) {
     dueTime.dateTime = taskData.dueAt;
     dueTime.textContent = `Due: ${formatDueDate(taskData.dueAt)} (local time)`;
     task.append(dueTime);
+    if (taskData.reminderMinutes !== null) {
+      const reminderText = document.createElement('span');
+      reminderText.className = 'task-due';
+      reminderText.textContent = formatReminder(taskData);
+      task.append(reminderText);
+    }
   }
   taskList.append(task);
   updateEmptyMessage();
@@ -165,12 +280,29 @@ taskDue.addEventListener('input', function () {
   taskDue.removeAttribute('aria-invalid');
 });
 
+taskReminder.addEventListener('change', function () {
+  taskError.textContent = '';
+  taskReminder.removeAttribute('aria-invalid');
+  updateCustomReminder();
+});
+
+reminderAmount.addEventListener('input', function () {
+  taskError.textContent = '';
+  reminderAmount.removeAttribute('aria-invalid');
+});
+
+reminderUnit.addEventListener('change', function () {
+  taskError.textContent = '';
+  reminderAmount.removeAttribute('aria-invalid');
+  reminderUnit.removeAttribute('aria-invalid');
+});
+
 taskForm.addEventListener('submit', function (event) {
   // Handle the form here instead of reloading the page.
   event.preventDefault();
   const title = taskInput.value.trim();
 
-  if (title.length === 0 || title.length > 200) {
+  if (!validTaskTitle(title)) {
     taskError.textContent = 'Enter a task title between 1 and 200 characters.';
     taskInput.setAttribute('aria-invalid', 'true');
     taskInput.focus();
@@ -185,16 +317,52 @@ taskForm.addEventListener('submit', function (event) {
     return;
   }
 
-  const taskData = { title: title, completed: false, dueAt: dueAt };
+  const reminderChoice = taskReminder.value;
+  if (!['none', '0', '10', '60', 'custom'].includes(reminderChoice) ||
+      (reminderChoice !== 'none' && dueAt === null)) {
+    taskError.textContent = 'Choose a valid reminder and a due date and time, or select No reminder.';
+    taskReminder.setAttribute('aria-invalid', 'true');
+    taskReminder.focus();
+    return;
+  }
+
+  let reminderMinutes = reminderChoice === 'none' ? null : Number(reminderChoice);
+  let customUnit = null;
+  if (reminderChoice === 'custom') {
+    reminderMinutes = customReminderMinutes(reminderAmount.valueAsNumber, reminderUnit.value);
+    if (reminderMinutes === null) {
+      taskError.textContent = 'Enter a positive custom reminder totaling 1 minute to 3 days, using minutes, hours, or days.';
+      reminderAmount.setAttribute('aria-invalid', 'true');
+      reminderAmount.focus();
+      return;
+    }
+    customUnit = reminderUnit.value;
+  }
+
+  const taskData = {
+    title: title, completed: false, dueAt: dueAt,
+    reminderMinutes: reminderMinutes,
+    reminderUnit: customUnit,
+    reminderShown: false,
+  };
   tasks.push(taskData);
   renderTask(taskData);
   saveTasks();
   taskError.textContent = '';
   taskInput.removeAttribute('aria-invalid');
   taskDue.removeAttribute('aria-invalid');
+  taskReminder.removeAttribute('aria-invalid');
   taskStatus.textContent = 'Task added.';
   taskForm.reset();
+  updateCustomReminder();
   taskInput.focus();
+  checkReminders();
 });
 
 loadTasks();
+updateCustomReminder();
+checkReminders();
+setInterval(checkReminders, 1000);
+document.addEventListener('visibilitychange', function () {
+  if (!document.hidden) checkReminders();
+});

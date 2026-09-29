@@ -1,39 +1,70 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Daymark</title>
-    <link rel="stylesheet" href="styles.css">
-    <script src="script.js" defer></script>
-    <script src="notes.js" defer></script>
-    <script src="sections.js" defer></script>
-  </head>
-  <body>
-    <main>
-      <h1>Daymark</h1>
-      <div class="section-controls" role="group" aria-label="Choose a section">
-        <button id="show-tasks" type="button" aria-pressed="true" aria-controls="tasks-section">Tasks</button>
-        <button id="show-notes" type="button" aria-pressed="false" aria-controls="notes-section">Notes</button>
-      </div>
-      <section id="tasks-section" aria-labelledby="tasks-heading">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Daymark</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="script.js" defer></script>
+  <script src="notes.js" defer></script>
+  <script src="sections.js" defer></script>
+  <!-- <script src="speech.js" defer></script> -->
+</head>
+
+<body>
+  <main>
+    <h1>Daymark</h1>
+    <section id="reminders" aria-labelledby="reminders-heading" hidden>
+      <h2 id="reminders-heading">Task reminders</h2>
+      <ul id="reminder-list" aria-live="polite" aria-relevant="additions"></ul>
+    </section>
+    <p id="reminder-status" class="hint" role="status"></p>
+    <div class="section-controls" role="group" aria-label="Choose a section">
+      <button id="show-tasks" type="button" aria-pressed="true" aria-controls="tasks-section">Tasks</button>
+      <button id="show-notes" type="button" aria-pressed="false" aria-controls="notes-section">Notes</button>
+    </div>
+    <section id="tasks-section" aria-labelledby="tasks-heading">
       <h2 id="tasks-heading">Tasks</h2>
-      <p>Add a task, then check it off when you finish.</p>
+      <!-- <p>Add a task, then check it off when you finish.</p> -->
 
       <form id="task-form">
         <label for="task-title">Task title</label>
         <div class="input-row">
-          <input id="task-title" name="task-title" type="text"
-            maxlength="200" required autocomplete="off"
+          <input id="task-title" name="task-title" type="text" maxlength="200" required autocomplete="off"
             aria-describedby="task-help task-error">
+          <!-- <button id="task-microphone" type="button" aria-controls="task-title"
+            aria-describedby="speech-help speech-status" disabled>🎤 Dictate title</button> -->
           <button type="submit">Add task</button>
         </div>
+        <!-- <p id="speech-status" class="hint" role="status" aria-live="polite">Checking speech recognition support…</p>
+        <p id="speech-help" class="hint">Dictation replaces the title for you to review before adding. Your browser asks for microphone access if needed and may send audio to its speech service. Daymark does not record or save audio. You can always type instead.</p> -->
         <label class="due-label" for="task-due">Due date and time (optional)</label>
-        <input id="task-due" name="task-due" type="datetime-local"
-          min="0001-01-01T00:00" max="9999-12-31T23:59" step="60"
-          aria-describedby="due-help task-error">
-        <p id="due-help" class="hint">Leave blank for no due date. Choose both a date and time. The local time stays as entered, even if you change time zones.</p>
-        <p id="task-help" class="hint">Up to 200 characters. Tasks are saved in this browser when storage is available. Avoid sensitive information.</p>
+        <input id="task-due" name="task-due" type="datetime-local" min="0001-01-01T00:00" max="9999-12-31T23:59"
+          step="60" aria-describedby="due-help task-error">
+        <!-- <p id="due-help" class="hint">Leave blank for no due date. Choose both a date and time. The local time stays as entered, even if you change time zones.</p> -->
+        <label class="due-label" for="task-reminder">Reminder (optional)</label>
+        <select id="task-reminder" aria-describedby="reminder-help task-error">
+          <option value="none">No reminder</option>
+          <option value="0">At the due time</option>
+          <option value="10">10 minutes before</option>
+          <option value="60">1 hour before</option>
+          <option value="custom">Custom</option>
+        </select>
+        <div id="custom-reminder" hidden>
+          <label class="due-label" for="reminder-amount">Remind me before the due time</label>
+          <input id="reminder-amount" type="number" min="0" step="any" disabled
+            aria-describedby="custom-reminder-help task-error">
+          <label class="due-label" for="reminder-unit">Unit</label>
+          <select id="reminder-unit" disabled aria-describedby="custom-reminder-help task-error">
+            <option value="minutes">Minutes</option>
+            <option value="hours">Hours</option>
+            <option value="days">Days</option>
+          </select>
+          <!-- <p id="custom-reminder-help" class="hint">Enter a positive number totaling 1 minute to 3 days (72 hours or 4,320 minutes). Decimals are allowed, such as 1.5 hours. A day means 24 hours.</p> -->
+        </div>
+        <!-- <p id="reminder-help" class="hint">Choose a due date and time to use a reminder. Keep Daymark open for in-app reminders. If a reminder is missed while closed or paused, it appears when you return. Browser storage must be available to remember that it was shown.</p>
+        <p id="task-help" class="hint">Up to 200 characters. Tasks are saved in this browser when storage is available. Avoid sensitive information.</p> -->
         <p id="task-error" role="alert"></p>
       </form>
 
@@ -42,31 +73,32 @@
       <ul id="task-list" aria-label="Tasks"></ul>
       <p id="task-status" class="hint" role="status"></p>
       <p id="storage-status" class="hint" role="status"></p>
-      </section>
+    </section>
 
-      <section id="notes-section" aria-labelledby="notes-heading" hidden>
-        <h2 id="notes-heading">Notes</h2>
-        <h3 id="note-form-heading">Create a note</h3>
-        <form id="note-form" aria-labelledby="note-form-heading" novalidate>
-          <label for="note-title">Note title</label>
-          <input id="note-title" name="note-title" type="text" required
-            maxlength="200" aria-describedby="note-help note-error">
-          <label for="note-body">Note body</label>
-          <textarea id="note-body" name="note-body" rows="5" required
-            maxlength="5000" aria-describedby="note-help note-error"></textarea>
-          <p id="note-help" class="hint">Both fields are required. Title: up to 200 characters. Body: up to 5,000 characters. Notes are saved in this browser when storage is available. Avoid sensitive information.</p>
-          <p id="note-error" role="alert"></p>
-          <div class="note-actions">
-            <button id="note-submit" type="submit">Add note</button>
-            <button id="note-cancel" type="button" hidden>Cancel edit</button>
-          </div>
-        </form>
-        <h3>Saved notes</h3>
-        <p id="notes-empty">No notes yet. Create your first note above.</p>
-        <ul id="note-list" aria-label="Notes"></ul>
-        <p id="note-status" class="hint" role="status"></p>
-        <p id="note-storage-status" class="hint" role="status"></p>
-      </section>
-    </main>
-  </body>
+    <section id="notes-section" aria-labelledby="notes-heading" hidden>
+      <h2 id="notes-heading">Notes</h2>
+      <!-- <h3 id="note-form-heading">Create a note</h3> -->
+      <form id="note-form" aria-labelledby="note-form-heading" novalidate>
+        <label for="note-title">Note title</label>
+        <input id="note-title" name="note-title" type="text" required maxlength="200"
+          aria-describedby="note-help note-error">
+        <label for="note-body">Note body</label>
+        <textarea id="note-body" name="note-body" rows="5" required maxlength="5000"
+          aria-describedby="note-help note-error"></textarea>
+        <!-- <p id="note-help" class="hint">Both fields are required. Title: up to 200 characters. Body: up to 5,000 characters. Notes are saved in this browser when storage is available. Avoid sensitive information.</p> -->
+        <p id="note-error" role="alert"></p>
+        <div class="note-actions">
+          <button id="note-submit" type="submit">Add note</button>
+          <button id="note-cancel" type="button" hidden>Cancel edit</button>
+        </div>
+      </form>
+      <h3>Saved notes</h3>
+      <p id="notes-empty">No notes yet. Create your first note above.</p>
+      <ul id="note-list" aria-label="Notes"></ul>
+      <p id="note-status" class="hint" role="status"></p>
+      <p id="note-storage-status" class="hint" role="status"></p>
+    </section>
+  </main>
+</body>
+
 </html>
